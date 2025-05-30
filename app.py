@@ -51,17 +51,23 @@ def mutate(route):
     route[i], route[j] = route[j], route[i]
     return route
 
-# Selects the best neighbor in a 3x3 toroidal grid
-def select_best_neighbor(pop, x, y, grid_size, cities):
+# Selects the best neighbor in a toroidal grid with variable neighborhood
+def select_best_neighbor(pop, x, y, grid_size, cities, neigh_type, neigh_radius):
     neighbors = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
+    for dx in range(-neigh_radius, neigh_radius+1):
+        for dy in range(-neigh_radius, neigh_radius+1):
+            if dx == 0 and dy == 0:
+                continue
+            if neigh_type == 'liniowe' and abs(dx) + abs(dy) > neigh_radius:
+                continue
+            if neigh_type == 'kompaktowe' and max(abs(dx), abs(dy)) > neigh_radius:
+                continue
             nx, ny = (x + dx) % grid_size, (y + dy) % grid_size
             neighbors.append(pop[nx][ny])
     return max(neighbors, key=lambda r: fitness(r, cities))
 
 # Runs the cellular evolutionary algorithm with animation support
-def run_cEA_TSP_animated(cities, grid_size, generations, update_callback, delay_func):
+def run_cEA_TSP_animated(cities, grid_size, generations, update_callback, delay_func, mutation_prob_func, neigh_type_func, neigh_radius_func):
     n = len(cities)
     pop = [[create_individual(n) for _ in range(grid_size)] for _ in range(grid_size)]
 
@@ -70,9 +76,10 @@ def run_cEA_TSP_animated(cities, grid_size, generations, update_callback, delay_
         for x in range(grid_size):
             for y in range(grid_size):
                 parent1 = pop[x][y]
-                parent2 = select_best_neighbor(pop, x, y, grid_size, cities)
+                parent2 = select_best_neighbor(pop, x, y, grid_size, cities, neigh_type_func(), neigh_radius_func())
                 child = crossover(parent1, parent2)
-                child = mutate(child)
+                if random.random() < mutation_prob_func():
+                    child = mutate(child)
                 if fitness(child, cities) > fitness(parent1, cities):
                     new_pop[x][y] = child
                 else:
@@ -123,7 +130,10 @@ def start_algorithm():
             grid_size,
             generations,
             update_callback=update_animation,
-            delay_func=lambda: scale_speed.get()
+            delay_func=lambda: scale_speed.get(),
+            mutation_prob_func=lambda: scale_mutation.get(),
+            neigh_type_func=lambda: neighborhood_type.get(),
+            neigh_radius_func=lambda: neighborhood_radius.get()
         )
         draw_path(best_route, points, canvas, tag="path")
 
@@ -142,16 +152,13 @@ def clear_canvas():
 root = tk.Tk()
 root.title("Algorytm Ewolucyjny Komórkowy - Problem Komiwojażera")
 
-# Canvas for city selection
 canvas = tk.Canvas(root, width=500, height=500, bg="white")
 canvas.grid(row=0, column=0, rowspan=20, padx=10, pady=10)
 canvas.bind("<Button-1>", on_canvas_click)
 
-# Canvas for animated route
 canvas_anim = tk.Canvas(root, width=500, height=500, bg="lightgray")
 canvas_anim.grid(row=0, column=1, rowspan=20, padx=10, pady=10)
 
-# UI controls (Polish labels)
 tk.Label(root, text="Liczba generacji").grid(row=0, column=2, sticky="w")
 scale_generations = tk.Scale(root, from_=10, to=500, orient="horizontal")
 scale_generations.set(100)
@@ -167,15 +174,29 @@ scale_speed = tk.Scale(root, from_=0.0, to=1.0, resolution=0.01, orient="horizon
 scale_speed.set(0.3)
 scale_speed.grid(row=5, column=2, padx=10)
 
-# Buttons (Polish)
+tk.Label(root, text="Prawdopodobieństwo mutacji").grid(row=6, column=2, sticky="w")
+scale_mutation = tk.Scale(root, from_=0.0, to=1.0, resolution=0.01, orient="horizontal")
+scale_mutation.set(0.1)
+scale_mutation.grid(row=7, column=2, padx=10)
+
+tk.Label(root, text="Typ sąsiedztwa").grid(row=8, column=2, sticky="w")
+neighborhood_type = tk.StringVar()
+type_menu = tk.OptionMenu(root, neighborhood_type, "kompaktowe", "liniowe")
+type_menu.grid(row=9, column=2, padx=10)
+neighborhood_type.set("kompaktowe")
+
+tk.Label(root, text="Rozmiar sąsiedztwa").grid(row=10, column=2, sticky="w")
+neighborhood_radius = tk.Scale(root, from_=1, to=5, orient="horizontal")
+neighborhood_radius.set(1)
+neighborhood_radius.grid(row=11, column=2, padx=10)
+
 start_button = tk.Button(root, text="Uruchom algorytm", command=start_algorithm)
-start_button.grid(row=6, column=2, pady=10)
+start_button.grid(row=12, column=2, pady=10)
 
 clear_button = tk.Button(root, text="Wyczyść planszę", command=clear_canvas)
-clear_button.grid(row=7, column=2, pady=5)
+clear_button.grid(row=13, column=2, pady=5)
 
 label_result = tk.Label(root, text="")
-label_result.grid(row=8, column=2)
+label_result.grid(row=14, column=2)
 
-# Start the GUI loop
 root.mainloop()
